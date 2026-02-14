@@ -78,7 +78,7 @@
         <p style="color:#555; font-size:min(0.9em,3vw); margin-top:10px;">They see you. They always see you.</p>
         <p class="hint">Tap to begin</p>
         <p class="hint" style="margin-top:10px; color:#333;" id="controlsHint"></p>
-        <p id="version">v0.5</p>
+        <p id="version">v0.6</p>
     </div>
     <div id="crosshair"></div>
     <div id="vignette"></div>
@@ -442,47 +442,38 @@
                 }
             }
 
-            // Street lights - MORE of them, brighter
-            const streetLights = [];
+            // Street light poles (decorative only, no point lights)
             for (let gx = 0; gx < gridCount; gx++) {
                 for (let gz = 0; gz < gridCount; gz++) {
                     const cx = offset+gx*cellSize, cz = offset+gz*cellSize;
                     for (let corner = 0; corner < 4; corner++) {
-                        if (rand() > 0.65) continue; // more lights spawn now
+                        if (rand() > 0.65) continue;
                         const sx = (corner%2===0?-1:1)*(blockSize/2+1);
                         const sz = (corner<2?-1:1)*(blockSize/2+1);
-
                         const pole = BABYLON.MeshBuilder.CreateCylinder("p", {height:4.5,diameter:0.12}, scene);
                         pole.position = new BABYLON.Vector3(cx+sx, 2.25, cz+sz);
                         pole.material = darkBuildMat;
-
                         const lm = new BABYLON.StandardMaterial("lm"+gx+gz+corner, scene);
-                        lm.emissiveColor = new BABYLON.Color3(0.8, 0.6, 0.3);
-                        lm.diffuseColor = new BABYLON.Color3(0.8, 0.6, 0.3);
+                        lm.emissiveColor = new BABYLON.Color3(0.3, 0.3, 0.25);
+                        lm.diffuseColor = new BABYLON.Color3(0.4, 0.4, 0.35);
                         const lamp = BABYLON.MeshBuilder.CreateSphere("l", {diameter:0.3}, scene);
                         lamp.position = new BABYLON.Vector3(cx+sx, 4.6, cz+sz);
                         lamp.material = lm;
-
-                        const lt = new BABYLON.PointLight("sl"+gx+gz+corner, new BABYLON.Vector3(cx+sx, 4.5, cz+sz), scene);
-                        lt.diffuse = new BABYLON.Color3(1.0, 0.8, 0.4);
-                        lt.intensity = 2.0;
-                        lt.range = 28;
-
-                        streetLights.push({ light: lt, lampMat: lm, baseIntensity: 2.0 });
                     }
                 }
             }
 
+            // === ONLY 2 LIGHTS: sun + sky (mobile-safe) ===
             // Sky hemisphere light
             const hemi = new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0, 1, 0), scene);
-            hemi.diffuse = new BABYLON.Color3(0.6, 0.65, 0.8);
-            hemi.groundColor = new BABYLON.Color3(0.25, 0.22, 0.2);
-            hemi.intensity = 1.5;
+            hemi.diffuse = new BABYLON.Color3(0.7, 0.75, 0.9);
+            hemi.groundColor = new BABYLON.Color3(0.3, 0.28, 0.25);
+            hemi.intensity = 2.0;
 
             // Afternoon sun
             const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-0.4, -0.8, 0.3), scene);
             sun.diffuse = new BABYLON.Color3(1.0, 0.95, 0.8);
-            sun.intensity = 2.5;
+            sun.intensity = 3.0;
 
             // === CREEPY PEOPLE ===
             const people = [];
@@ -667,18 +658,6 @@
                 if (whisperCooldown <= 0) {
                     if (closestDist < 15) playWhisper();
                     whisperCooldown = 5 + Math.random()*12;
-                }
-
-                // Flickering lights
-                for (const sl of streetLights) {
-                    if (Math.random() < 0.005) {
-                        sl.light.intensity = 0;
-                        sl.lampMat.emissiveColor = BABYLON.Color3.Black();
-                    } else {
-                        const fl = sl.baseIntensity + Math.sin(time*10+sl.light.position.x)*0.15;
-                        sl.light.intensity = fl;
-                        sl.lampMat.emissiveColor = new BABYLON.Color3(0.8*fl/2, 0.6*fl/2, 0.3*fl/2);
-                    }
                 }
 
                 // Breathing
