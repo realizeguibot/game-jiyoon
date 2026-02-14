@@ -78,7 +78,7 @@
         <p style="color:#555; font-size:min(0.9em,3vw); margin-top:10px;">They see you. They always see you.</p>
         <p class="hint">Tap to begin</p>
         <p class="hint" style="margin-top:10px; color:#333;" id="controlsHint"></p>
-        <p id="version">v0.6</p>
+        <p id="version">v0.7</p>
     </div>
     <div id="crosshair"></div>
     <div id="vignette"></div>
@@ -524,23 +524,77 @@
                 const hn = new BABYLON.TransformNode("hn"+idx, scene);
                 hn.parent = root; hn.position.y = 1.4*hs;
 
-                const head = BABYLON.MeshBuilder.CreateBox("hd"+idx, {width:0.22,height:0.26,depth:0.22}, scene);
+                // Head - slightly rounded using sphere
+                const head = BABYLON.MeshBuilder.CreateSphere("hd"+idx, {diameterX:0.24,diameterY:0.28,diameterZ:0.24,segments:8}, scene);
                 head.material = sm; head.parent = hn;
 
+                // Face plane (slightly lighter skin for face area)
+                const faceMat = new BABYLON.StandardMaterial("fc"+idx, scene);
+                faceMat.diffuseColor = new BABYLON.Color3(ss*1.1, ss*0.88, ss*0.78);
+                faceMat.specularColor = BABYLON.Color3.Black();
+                const face = BABYLON.MeshBuilder.CreatePlane("fcp"+idx, {width:0.18,height:0.2}, scene);
+                face.position = new BABYLON.Vector3(0, 0, -0.115); face.material = faceMat; face.parent = hn;
+
+                // Eye whites - larger, visible
                 const em = new BABYLON.StandardMaterial("pe"+idx, scene);
-                em.diffuseColor = new BABYLON.Color3(0.95, 0.95, 0.9);
-                em.emissiveColor = new BABYLON.Color3(0.2, 0.15, 0.08);
-                em.specularColor = BABYLON.Color3.Black();
+                em.diffuseColor = new BABYLON.Color3(0.95, 0.95, 0.92);
+                em.emissiveColor = new BABYLON.Color3(0.15, 0.1, 0.05);
+                em.specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+
+                // Iris material
+                const irisMat = new BABYLON.StandardMaterial("ir"+idx, scene);
+                const irisR = 0.15 + rand()*0.25;
+                const irisG = 0.15 + rand()*0.2;
+                const irisB = 0.1 + rand()*0.3;
+                irisMat.diffuseColor = new BABYLON.Color3(irisR, irisG, irisB);
+                irisMat.specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
 
                 for (let s = -1; s <= 1; s += 2) {
-                    const eye = BABYLON.MeshBuilder.CreateSphere("ey"+idx+s, {diameter:0.05}, scene);
-                    eye.position = new BABYLON.Vector3(s*0.06, 0.03, -0.11); eye.material = em; eye.parent = hn;
-                    const pup = BABYLON.MeshBuilder.CreateSphere("pu"+idx+s, {diameter:0.028}, scene);
-                    pup.position = new BABYLON.Vector3(s*0.06, 0.03, -0.125); pup.material = pupilMat; pup.parent = hn;
+                    // Eye white (oval)
+                    const eyeWhite = BABYLON.MeshBuilder.CreateSphere("ew"+idx+s, {diameterX:0.07,diameterY:0.045,diameterZ:0.03,segments:8}, scene);
+                    eyeWhite.position = new BABYLON.Vector3(s*0.055, 0.025, -0.115);
+                    eyeWhite.material = em; eyeWhite.parent = hn;
+
+                    // Iris
+                    const iris = BABYLON.MeshBuilder.CreateSphere("ir"+idx+s, {diameter:0.032,segments:8}, scene);
+                    iris.position = new BABYLON.Vector3(s*0.055, 0.025, -0.13);
+                    iris.material = irisMat; iris.parent = hn;
+
+                    // Pupil (black dot)
+                    const pup = BABYLON.MeshBuilder.CreateSphere("pu"+idx+s, {diameter:0.018,segments:6}, scene);
+                    pup.position = new BABYLON.Vector3(s*0.055, 0.025, -0.138);
+                    pup.material = pupilMat; pup.parent = hn;
+
+                    // Eyelid / eyebrow ridge
+                    const brow = BABYLON.MeshBuilder.CreateBox("br"+idx+s, {width:0.08,height:0.012,depth:0.02}, scene);
+                    brow.position = new BABYLON.Vector3(s*0.055, 0.055, -0.11);
+                    brow.rotation.z = s * -0.15;
+                    const browMat = new BABYLON.StandardMaterial("brm"+idx+s, scene);
+                    browMat.diffuseColor = new BABYLON.Color3(ss*0.4, ss*0.35, ss*0.3);
+                    browMat.specularColor = BABYLON.Color3.Black();
+                    brow.material = browMat; brow.parent = hn;
                 }
 
-                const mouth = BABYLON.MeshBuilder.CreatePlane("mo"+idx, {width:0.08,height:0.01}, scene);
-                mouth.position = new BABYLON.Vector3(0, -0.06, -0.115); mouth.material = pupilMat; mouth.parent = hn;
+                // Nose
+                const nose = BABYLON.MeshBuilder.CreateBox("ns"+idx, {width:0.025,height:0.04,depth:0.03}, scene);
+                nose.position = new BABYLON.Vector3(0, -0.01, -0.125);
+                nose.material = sm; nose.parent = hn;
+
+                // Mouth - wider, slightly open (creepy)
+                const mouthMat = new BABYLON.StandardMaterial("mm"+idx, scene);
+                mouthMat.diffuseColor = new BABYLON.Color3(0.15, 0.05, 0.05);
+                mouthMat.specularColor = BABYLON.Color3.Black();
+                const mouth = BABYLON.MeshBuilder.CreatePlane("mo"+idx, {width:0.07,height:0.018}, scene);
+                mouth.position = new BABYLON.Vector3(0, -0.055, -0.12);
+                mouth.material = mouthMat; mouth.parent = hn;
+
+                // Lips outline
+                const lipMat = new BABYLON.StandardMaterial("lp"+idx, scene);
+                lipMat.diffuseColor = new BABYLON.Color3(ss*0.7, ss*0.5, ss*0.5);
+                lipMat.specularColor = BABYLON.Color3.Black();
+                const lips = BABYLON.MeshBuilder.CreatePlane("lp"+idx, {width:0.08,height:0.025}, scene);
+                lips.position = new BABYLON.Vector3(0, -0.055, -0.118);
+                lips.material = lipMat; lips.parent = hn;
 
                 const shd = BABYLON.MeshBuilder.CreateGround("sh"+idx, {width:0.6,height:0.6}, scene);
                 shd.position.y = 0.02;
