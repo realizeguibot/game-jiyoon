@@ -78,7 +78,7 @@
         <p style="color:#555; font-size:min(0.9em,3vw); margin-top:10px;">They see you. They always see you.</p>
         <p class="hint">Tap to begin</p>
         <p class="hint" style="margin-top:10px; color:#333;" id="controlsHint"></p>
-        <p id="version">v0.3</p>
+        <p id="version">v0.4</p>
     </div>
     <div id="crosshair"></div>
     <div id="vignette"></div>
@@ -474,11 +474,16 @@
                 }
             }
 
-            // Hemisphere light - strong moonlight
+            // Hemisphere ambient fill
             const hemi = new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0, 1, 0), scene);
             hemi.diffuse = new BABYLON.Color3(0.25, 0.25, 0.35);
             hemi.groundColor = new BABYLON.Color3(0.08, 0.08, 0.1);
             hemi.intensity = 1.2;
+
+            // Directional moonlight - casts light across the whole city
+            const moon = new BABYLON.DirectionalLight("moon", new BABYLON.Vector3(-0.5, -1, 0.3), scene);
+            moon.diffuse = new BABYLON.Color3(0.45, 0.5, 0.7);
+            moon.intensity = 1.8;
 
             // Player flashlight
             const flashlight = new BABYLON.SpotLight("flash",
