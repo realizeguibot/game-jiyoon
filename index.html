@@ -78,7 +78,7 @@
         <p style="color:#555; font-size:min(0.9em,3vw); margin-top:10px;">They see you. They always see you.</p>
         <p class="hint">Tap to begin</p>
         <p class="hint" style="margin-top:10px; color:#333;" id="controlsHint"></p>
-        <p id="version">v0.4</p>
+        <p id="version">v0.5</p>
     </div>
     <div id="crosshair"></div>
     <div id="vignette"></div>
@@ -306,15 +306,15 @@
         // === SCENE ===
         const createScene = () => {
             const scene = new BABYLON.Scene(engine);
-            scene.clearColor = new BABYLON.Color3(0.04, 0.04, 0.07);
-            scene.ambientColor = new BABYLON.Color3(0.1, 0.1, 0.12);
+            scene.clearColor = new BABYLON.Color3(0.53, 0.7, 0.9);
+            scene.ambientColor = new BABYLON.Color3(0.4, 0.4, 0.35);
             scene.gravity = new BABYLON.Vector3(0, -0.7, 0);
             scene.collisionsEnabled = true;
 
-            // Fog - lighter, less dense
+            // Light haze
             scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
-            scene.fogDensity = 0.012;
-            scene.fogColor = new BABYLON.Color3(0.04, 0.04, 0.07);
+            scene.fogDensity = 0.004;
+            scene.fogColor = new BABYLON.Color3(0.6, 0.7, 0.85);
 
             // Camera
             const camera = new BABYLON.UniversalCamera("cam", new BABYLON.Vector3(0, 1.7, 0), scene);
@@ -339,35 +339,34 @@
                 window.addEventListener("keyup", e => { if (e.key === "Shift") { sprinting = false; camera.speed = 0.3; } });
             }
 
-            // === MATERIALS ===
+            // === MATERIALS (afternoon daylight) ===
             const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
-            groundMat.diffuseColor = new BABYLON.Color3(0.25, 0.24, 0.22);
-            groundMat.specularColor = new BABYLON.Color3(0.03, 0.03, 0.03);
+            groundMat.diffuseColor = new BABYLON.Color3(0.45, 0.42, 0.35);
+            groundMat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
 
             const roadMat = new BABYLON.StandardMaterial("roadMat", scene);
-            roadMat.diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.2);
-            roadMat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
+            roadMat.diffuseColor = new BABYLON.Color3(0.35, 0.35, 0.35);
+            roadMat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
 
             const buildingMat = new BABYLON.StandardMaterial("buildMat", scene);
-            buildingMat.diffuseColor = new BABYLON.Color3(0.3, 0.28, 0.32);
-            buildingMat.specularColor = BABYLON.Color3.Black();
+            buildingMat.diffuseColor = new BABYLON.Color3(0.65, 0.6, 0.55);
+            buildingMat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
 
             const darkBuildMat = new BABYLON.StandardMaterial("darkBuild", scene);
-            darkBuildMat.diffuseColor = new BABYLON.Color3(0.2, 0.19, 0.22);
-            darkBuildMat.specularColor = BABYLON.Color3.Black();
+            darkBuildMat.diffuseColor = new BABYLON.Color3(0.5, 0.48, 0.45);
+            darkBuildMat.specularColor = new BABYLON.Color3(0.03, 0.03, 0.03);
 
             const windowMat = new BABYLON.StandardMaterial("winMat", scene);
-            windowMat.diffuseColor = new BABYLON.Color3(0.05, 0.05, 0.03);
-            windowMat.emissiveColor = new BABYLON.Color3(0.5, 0.4, 0.15);
-            windowMat.specularColor = BABYLON.Color3.Black();
+            windowMat.diffuseColor = new BABYLON.Color3(0.3, 0.35, 0.45);
+            windowMat.specularColor = new BABYLON.Color3(0.3, 0.3, 0.3);
 
             const windowDarkMat = new BABYLON.StandardMaterial("winDarkMat", scene);
-            windowDarkMat.diffuseColor = new BABYLON.Color3(0.05, 0.05, 0.05);
-            windowDarkMat.specularColor = BABYLON.Color3.Black();
+            windowDarkMat.diffuseColor = new BABYLON.Color3(0.15, 0.15, 0.18);
+            windowDarkMat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
 
             const sidewalkMat = new BABYLON.StandardMaterial("sidewalkMat", scene);
-            sidewalkMat.diffuseColor = new BABYLON.Color3(0.3, 0.28, 0.27);
-            sidewalkMat.specularColor = BABYLON.Color3.Black();
+            sidewalkMat.diffuseColor = new BABYLON.Color3(0.55, 0.52, 0.48);
+            sidewalkMat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
 
             const pupilMat = new BABYLON.StandardMaterial("pupilMat", scene);
             pupilMat.diffuseColor = new BABYLON.Color3(0.02, 0.02, 0.02);
@@ -474,24 +473,16 @@
                 }
             }
 
-            // Hemisphere ambient fill
+            // Sky hemisphere light
             const hemi = new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0, 1, 0), scene);
-            hemi.diffuse = new BABYLON.Color3(0.25, 0.25, 0.35);
-            hemi.groundColor = new BABYLON.Color3(0.08, 0.08, 0.1);
-            hemi.intensity = 1.2;
+            hemi.diffuse = new BABYLON.Color3(0.6, 0.65, 0.8);
+            hemi.groundColor = new BABYLON.Color3(0.25, 0.22, 0.2);
+            hemi.intensity = 1.5;
 
-            // Directional moonlight - casts light across the whole city
-            const moon = new BABYLON.DirectionalLight("moon", new BABYLON.Vector3(-0.5, -1, 0.3), scene);
-            moon.diffuse = new BABYLON.Color3(0.45, 0.5, 0.7);
-            moon.intensity = 1.8;
-
-            // Player flashlight
-            const flashlight = new BABYLON.SpotLight("flash",
-                camera.position, camera.getDirection(BABYLON.Vector3.Forward()),
-                Math.PI / 3.5, 8, scene);
-            flashlight.diffuse = new BABYLON.Color3(0.9, 0.85, 0.7);
-            flashlight.intensity = 1.5;
-            flashlight.range = 35;
+            // Afternoon sun
+            const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-0.4, -0.8, 0.3), scene);
+            sun.diffuse = new BABYLON.Color3(1.0, 0.95, 0.8);
+            sun.intensity = 2.5;
 
             // === CREEPY PEOPLE ===
             const people = [];
@@ -518,14 +509,14 @@
                 const bw = rand()>0.5 ? 0.3 : 0.4;
 
                 const cm = new BABYLON.StandardMaterial("pc"+idx, scene);
-                const sh = 0.05 + rand()*0.08;
-                cm.diffuseColor = new BABYLON.Color3(sh, sh, sh);
+                const sh = 0.1 + rand()*0.15;
+                cm.diffuseColor = new BABYLON.Color3(sh, sh, sh*0.95);
                 cm.specularColor = BABYLON.Color3.Black();
 
                 const sm = new BABYLON.StandardMaterial("ps"+idx, scene);
-                const ss = 0.25 + rand()*0.2;
-                sm.diffuseColor = new BABYLON.Color3(ss, ss*0.85, ss*0.8);
-                sm.specularColor = BABYLON.Color3.Black();
+                const ss = 0.5 + rand()*0.25;
+                sm.diffuseColor = new BABYLON.Color3(ss, ss*0.8, ss*0.7);
+                sm.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
 
                 const body = BABYLON.MeshBuilder.CreateBox("bd"+idx, {width:bw, height:0.7*hs, depth:0.25}, scene);
                 body.position.y = 0.85*hs; body.material = cm; body.parent = root;
@@ -546,8 +537,8 @@
                 head.material = sm; head.parent = hn;
 
                 const em = new BABYLON.StandardMaterial("pe"+idx, scene);
-                em.diffuseColor = new BABYLON.Color3(0.9, 0.9, 0.85);
-                em.emissiveColor = new BABYLON.Color3(0.35, 0.3, 0.15);
+                em.diffuseColor = new BABYLON.Color3(0.95, 0.95, 0.9);
+                em.emissiveColor = new BABYLON.Color3(0.2, 0.15, 0.08);
                 em.specularColor = BABYLON.Color3.Black();
 
                 for (let s = -1; s <= 1; s += 2) {
@@ -610,10 +601,6 @@
 
                 const camPos = camera.position;
 
-                // Flashlight follows camera
-                flashlight.position.copyFrom(camPos);
-                flashlight.direction = camera.getDirection(BABYLON.Vector3.Forward());
-
                 // Footsteps
                 const moving = isMobile ? mobileMoving : (camera._localDirection && (camera._localDirection.x !== 0 || camera._localDirection.z !== 0));
                 if (moving) {
@@ -635,8 +622,8 @@
                     p.headNode.rotation.x = Math.atan2(dy, dist) * 0.5 + p.headTiltOffset;
                     p.root.rotation.z = Math.sin(time * p.swaySpeed) * p.swayAmount;
 
-                    const glow = Math.max(0, 1-dist/20) * 0.5;
-                    p.eyeMat.emissiveColor = new BABYLON.Color3(0.35+glow*1.0, 0.3+glow*0.3, 0.15);
+                    const glow = Math.max(0, 1-dist/20) * 0.3;
+                    p.eyeMat.emissiveColor = new BABYLON.Color3(0.2+glow*0.5, 0.15+glow*0.2, 0.08);
 
                     if (p.creepFactor > 0.6 && dist > 3 && dist < 30) {
                         const fwd = camera.getDirection(BABYLON.Vector3.Forward());
@@ -699,11 +686,11 @@
                 camera.rotation.z = Math.sin(breathPhase) * 0.003;
 
                 // Vignette
-                const vi = Math.max(0.4, Math.min(0.9, 1-(closestDist-3)/15));
-                vignette.style.background = `radial-gradient(ellipse at center, transparent ${55-vi*15}%, rgba(0,0,0,${vi*0.8}) 100%)`;
+                const vi = Math.max(0.0, Math.min(0.5, 1-(closestDist-3)/10));
+                vignette.style.background = `radial-gradient(ellipse at center, transparent ${70-vi*20}%, rgba(0,0,0,${vi*0.5}) 100%)`;
 
-                // Dynamic fog
-                scene.fogDensity = 0.012 + Math.max(0, (8-closestDist)/8)*0.008;
+                // Dynamic fog - slight thickening near people
+                scene.fogDensity = 0.004 + Math.max(0, (8-closestDist)/8)*0.003;
             });
 
             return scene;
