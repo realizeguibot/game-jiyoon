@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>They Watch</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+        #renderCanvas { width: 100%; height: 100%; touch-action: none; display: block; }
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.92); z-index: 10; cursor: pointer;
+            font-family: 'Courier New', monospace;
+        }
+        #overlay h1 {
+            color: #8b0000; font-size: min(4em, 10vw); letter-spacing: min(12px, 2vw);
+            text-shadow: 0 0 20px #8b0000, 0 0 40px #5a0000;
+            animation: flicker 3s infinite;
+        }
+        #overlay p { color: #666; font-size: min(1.1em, 3.5vw); margin-top: 20px; text-align: center; padding: 0 20px; }
+        #overlay .hint { color: #444; font-size: min(0.8em, 3vw); margin-top: 40px; }
+        @keyframes flicker {
+            0%, 95%, 100% { opacity: 1; }
+            96% { opacity: 0.3; }
+            97% { opacity: 0.8; }
+            98% { opacity: 0.2; }
+        }
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 2px; height: 2px; background: rgba(200,200,200,0.3);
+            box-shadow: 0 -8px 0 rgba(200,200,200,0.3), 0 8px 0 rgba(200,200,200,0.3),
+                        -8px 0 0 rgba(200,200,200,0.3), 8px 0 0 rgba(200,200,200,0.3);
+            z-index: 5; display: none; pointer-events: none;
+        }
+        #vignette {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 4; display: none;
+            background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.7) 100%);
+        }
+        #warning {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #8b0000; font-family: 'Courier New', monospace; font-size: min(1.5em, 5vw);
+            pointer-events: none; z-index: 6; opacity: 0; display: none;
+            text-shadow: 0 0 10px #8b0000;
+        }
+
+        /* Mobile touch controls */
+        #touchControls {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 5; pointer-events: none;
+        }
+        #joystickArea {
+            position: absolute; bottom: 20px; left: 20px;
+            width: 140px; height: 140px; pointer-events: auto;
+        }
+        #joystickBase {
+            position: absolute; top: 0; left: 0; width: 140px; height: 140px;
+            border: 2px solid rgba(255,255,255,0.15); border-radius: 50%;
+            background: rgba(0,0,0,0.3);
+        }
+        #joystickThumb {
+            position: absolute; width: 50px; height: 50px;
+            border-radius: 50%; background: rgba(255,255,255,0.2);
+            top: 45px; left: 45px; pointer-events: none;
+        }
+        #sprintBtn {
+            position: absolute; bottom: 30px; right: 30px;
+            width: 70px; height: 70px; border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.15);
+            background: rgba(0,0,0,0.3); pointer-events: auto;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Courier New', monospace; color: rgba(255,255,255,0.25);
+            font-size: 11px; text-transform: uppercase;
+        }
+        #sprintBtn.active {
+            border-color: rgba(139,0,0,0.5); background: rgba(139,0,0,0.2);
+            color: rgba(255,255,255,0.5);
+        }
+        #lookArea {
+            position: absolute; top: 0; right: 0; width: 60%; height: 100%;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <div id="overlay">
+        <h1>THEY WATCH</h1>
+        <p>You are not alone in this city.</p>
+        <p style="color:#555; font-size:min(0.9em,3vw); margin-top:10px;">They see you. They always see you.</p>
+        <p class="hint">Tap to begin</p>
+        <p class="hint" style="margin-top:10px; color:#333;" id="controlsHint"></p>
+    </div>
+    <div id="crosshair"></div>
+    <div id="vignette"></div>
+    <div id="warning">they're closer now</div>
+
+    <div id="touchControls">
+        <div id="lookArea"></div>
+        <div id="joystickArea">
+            <div id="joystickBase"></div>
+            <div id="joystickThumb"></div>
+        </div>
+        <div id="sprintBtn">RUN</div>
+    </div>
+
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script>
+        const canvas = document.getElementById("renderCanvas");
+        const overlay = document.getElementById("overlay");
+        const crosshair = document.getElementById("crosshair");
+        const vignette = document.getElementById("vignette");
+        const warningEl = document.getElementById("warning");
+        const touchControls = document.getElementById("touchControls");
+        const joystickArea = document.getElementById("joystickArea");
+        const joystickThumb = document.getElementById("joystickThumb");
+        const sprintBtn = document.getElementById("sprintBtn");
+        const lookArea = document.getElementById("lookArea");
+        const controlsHint = document.getElementById("controlsHint");
+
+        // Detect mobile
+        const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+            || ('ontouchstart' in window && window.innerWidth < 1200);
+
+        controlsHint.textContent = isMobile
+            ? "Left stick to move \u2022 Drag right to look \u2022 RUN button to sprint"
+            : "WASD to move \u2022 Mouse to look \u2022 Shift to run";
+
+        const engine = new BABYLON.Engine(canvas, true, { stencil: true, preserveDrawingBuffer: true, premultipliedAlpha: false });
+
+        // Audio context for procedural sounds
+        let audioCtx = null;
+        let ambienceGain = null;
+        let ambiencePlaying = false;
+
+        function startAmbience() {
+            if (ambiencePlaying) return;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            ambienceGain = audioCtx.createGain();
+            ambienceGain.gain.value = 0.06;
+            ambienceGain.connect(audioCtx.destination);
+
+            // Deep drone
+            const osc1 = audioCtx.createOscillator();
+            osc1.type = "sawtooth";
+            osc1.frequency.value = 38;
+            const filter1 = audioCtx.createBiquadFilter();
+            filter1.type = "lowpass";
+            filter1.frequency.value = 80;
+            osc1.connect(filter1);
+            filter1.connect(ambienceGain);
+            osc1.start();
+
+            // Sub rumble
+            const osc2 = audioCtx.createOscillator();
+            osc2.type = "sine";
+            osc2.frequency.value = 22;
+            const g2 = audioCtx.createGain();
+            g2.gain.value = 0.4;
+            osc2.connect(g2);
+            g2.connect(ambienceGain);
+            osc2.start();
+
+            // Dissonant high tone
+            const osc3 = audioCtx.createOscillator();
+            osc3.type = "sine";
+            osc3.frequency.value = 440;
+            const g3 = audioCtx.createGain();
+            g3.gain.value = 0.008;
+            const filter3 = audioCtx.createBiquadFilter();
+            filter3.type = "bandpass";
+            filter3.frequency.value = 440;
+            filter3.Q.value = 30;
+            osc3.connect(filter3);
+            filter3.connect(g3);
+            g3.connect(ambienceGain);
+            osc3.start();
+            const lfo = audioCtx.createOscillator();
+            lfo.frequency.value = 0.1;
+            const lfoGain = audioCtx.createGain();
+            lfoGain.gain.value = 5;
+            lfo.connect(lfoGain);
+            lfoGain.connect(osc3.frequency);
+            lfo.start();
+
+            ambiencePlaying = true;
+        }
+
+        function playFootstep() {
+            if (!audioCtx) return;
+            const buf = audioCtx.createBufferSource();
+            const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.12, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < data.length; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (data.length * 0.15));
+            }
+            buf.buffer = buffer;
+            const g = audioCtx.createGain();
+            g.gain.value = 0.08;
+            const f = audioCtx.createBiquadFilter();
+            f.type = "lowpass";
+            f.frequency.value = 600;
+            buf.connect(f);
+            f.connect(g);
+            g.connect(audioCtx.destination);
+            buf.start();
+        }
+
+        function playScaryStinger() {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            osc.type = "sawtooth";
+            osc.frequency.value = 200 + Math.random() * 300;
+            const g = audioCtx.createGain();
+            g.gain.value = 0.12;
+            g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+            const f = audioCtx.createBiquadFilter();
+            f.type = "bandpass";
+            f.frequency.value = 800;
+            f.Q.value = 5;
+            osc.connect(f);
+            f.connect(g);
+            g.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 1.5);
+        }
+
+        function playWhisper() {
+            if (!audioCtx) return;
+            const buf = audioCtx.createBufferSource();
+            const len = audioCtx.sampleRate * 2;
+            const buffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < len; i++) {
+                const env = Math.sin((i / len) * Math.PI);
+                data[i] = (Math.random() * 2 - 1) * env * 0.03;
+            }
+            buf.buffer = buffer;
+            const f = audioCtx.createBiquadFilter();
+            f.type = "bandpass";
+            f.frequency.value = 2000 + Math.random() * 1000;
+            f.Q.value = 8;
+            buf.connect(f);
+            const g = audioCtx.createGain();
+            g.gain.value = 0.5;
+            f.connect(g);
+            g.connect(audioCtx.destination);
+            buf.start();
+        }
+
+        // === MOBILE TOUCH INPUT STATE ===
+        let touchMoveX = 0, touchMoveZ = 0; // -1 to 1 joystick
+        let touchLookDX = 0, touchLookDY = 0; // accumulated look delta
+        let sprinting = false;
+        let joystickTouchId = null;
+        let lookTouchId = null;
+        let joystickCenterX = 0, joystickCenterY = 0;
+        let lastLookX = 0, lastLookY = 0;
+
+        function setupTouchControls() {
+            const jRect = joystickArea.getBoundingClientRect();
+            joystickCenterX = jRect.left + jRect.width / 2;
+            joystickCenterY = jRect.top + jRect.height / 2;
+            const maxDist = jRect.width / 2 - 25;
+
+            joystickArea.addEventListener("touchstart", (e) => {
+                e.preventDefault();
+                const t = e.changedTouches[0];
+                joystickTouchId = t.identifier;
+                updateJoystick(t.clientX, t.clientY, maxDist);
+            }, { passive: false });
+
+            joystickArea.addEventListener("touchmove", (e) => {
+                e.preventDefault();
+                for (const t of e.changedTouches) {
+                    if (t.identifier === joystickTouchId) {
+                        updateJoystick(t.clientX, t.clientY, maxDist);
+                    }
+                }
+            }, { passive: false });
+
+            joystickArea.addEventListener("touchend", (e) => {
+                for (const t of e.changedTouches) {
+                    if (t.identifier === joystickTouchId) {
+                        joystickTouchId = null;
+                        touchMoveX = 0;
+                        touchMoveZ = 0;
+                        joystickThumb.style.top = "45px";
+                        joystickThumb.style.left = "45px";
+                    }
+                }
+            });
+
+            joystickArea.addEventListener("touchcancel", (e) => {
+                joystickTouchId = null;
+                touchMoveX = 0;
+                touchMoveZ = 0;
+                joystickThumb.style.top = "45px";
+                joystickThumb.style.left = "45px";
+            });
+
+            function updateJoystick(x, y, max) {
+                let dx = x - joystickCenterX;
+                let dy = y - joystickCenterY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > max) { dx = dx / dist * max; dy = dy / dist * max; }
+                touchMoveX = dx / max;
+                touchMoveZ = dy / max;
+                joystickThumb.style.left = (45 + dx) + "px";
+                joystickThumb.style.top = (45 + dy) + "px";
+            }
+
+            // Look area - right side of screen
+            lookArea.addEventListener("touchstart", (e) => {
+                e.preventDefault();
+                const t = e.changedTouches[0];
+                lookTouchId = t.identifier;
+                lastLookX = t.clientX;
+                lastLookY = t.clientY;
+            }, { passive: false });
+
+            lookArea.addEventListener("touchmove", (e) => {
+                e.preventDefault();
+                for (const t of e.changedTouches) {
+                    if (t.identifier === lookTouchId) {
+                        touchLookDX += (t.clientX - lastLookX);
+                        touchLookDY += (t.clientY - lastLookY);
+                        lastLookX = t.clientX;
+                        lastLookY = t.clientY;
+                    }
+                }
+            }, { passive: false });
+
+            lookArea.addEventListener("touchend", (e) => {
+                for (const t of e.changedTouches) {
+                    if (t.identifier === lookTouchId) lookTouchId = null;
+                }
+            });
+
+            lookArea.addEventListener("touchcancel", () => { lookTouchId = null; });
+
+            // Sprint button
+            sprintBtn.addEventListener("touchstart", (e) => {
+                e.preventDefault();
+                sprinting = true;
+                sprintBtn.classList.add("active");
+            }, { passive: false });
+
+            sprintBtn.addEventListener("touchend", (e) => {
+                sprinting = false;
+                sprintBtn.classList.remove("active");
+            });
+
+            sprintBtn.addEventListener("touchcancel", () => {
+                sprinting = false;
+                sprintBtn.classList.remove("active");
+            });
+        }
+
+        const createScene = () => {
+            const scene = new BABYLON.Scene(engine);
+            scene.clearColor = new BABYLON.Color3(0.01, 0.01, 0.02);
+            scene.ambientColor = new BABYLON.Color3(0.02, 0.02, 0.03);
+            scene.gravity = new BABYLON.Vector3(0, -0.7, 0);
+            scene.collisionsEnabled = true;
+
+            // Fog
+            scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+            scene.fogDensity = 0.025;
+            scene.fogColor = new BABYLON.Color3(0.02, 0.02, 0.03);
+
+            // Camera (FPS)
+            const camera = new BABYLON.UniversalCamera("cam", new BABYLON.Vector3(0, 1.7, 0), scene);
+            camera.minZ = 0.1;
+            camera.ellipsoid = new BABYLON.Vector3(0.4, 0.85, 0.4);
+            camera.checkCollisions = true;
+            camera.applyGravity = true;
+
+            if (isMobile) {
+                // On mobile: don't attach default controls - we handle it manually
+                camera.speed = 0;
+                camera.angularSensibility = 10000;
+                camera.inertia = 0;
+                // Disable Babylon's built-in touch camera
+                camera.inputs.clear();
+            } else {
+                camera.attachControl(canvas, true);
+                camera.speed = 0.3;
+                camera.angularSensibility = 3000;
+                camera.inertia = 0.82;
+                camera.keysUp = [87];
+                camera.keysDown = [83];
+                camera.keysLeft = [65];
+                camera.keysRight = [68];
+            }
+
+            // Sprint (desktop)
+            if (!isMobile) {
+                window.addEventListener("keydown", e => { if (e.key === "Shift") { sprinting = true; camera.speed = 0.55; } });
+                window.addEventListener("keyup", e => { if (e.key === "Shift") { sprinting = false; camera.speed = 0.3; } });
+            }
+
+            // Materials
+            const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
+            groundMat.diffuseColor = new BABYLON.Color3(0.08, 0.08, 0.08);
+            groundMat.specularColor = new BABYLON.Color3(0.02, 0.02, 0.02);
+
+            const roadMat = new BABYLON.StandardMaterial("roadMat", scene);
+            roadMat.diffuseColor = new BABYLON.Color3(0.06, 0.06, 0.06);
+            roadMat.specularColor = BABYLON.Color3.Black();
+
+            const buildingMat = new BABYLON.StandardMaterial("buildMat", scene);
+            buildingMat.diffuseColor = new BABYLON.Color3(0.1, 0.1, 0.12);
+            buildingMat.specularColor = BABYLON.Color3.Black();
+
+            const darkBuildMat = new BABYLON.StandardMaterial("darkBuild", scene);
+            darkBuildMat.diffuseColor = new BABYLON.Color3(0.06, 0.06, 0.07);
+            darkBuildMat.specularColor = BABYLON.Color3.Black();
+
+            const windowMat = new BABYLON.StandardMaterial("winMat", scene);
+            windowMat.diffuseColor = new BABYLON.Color3(0.01, 0.01, 0.01);
+            windowMat.emissiveColor = new BABYLON.Color3(0.15, 0.12, 0.05);
+            windowMat.specularColor = BABYLON.Color3.Black();
+
+            const windowDarkMat = new BABYLON.StandardMaterial("winDarkMat", scene);
+            windowDarkMat.diffuseColor = new BABYLON.Color3(0.02, 0.02, 0.02);
+            windowDarkMat.specularColor = BABYLON.Color3.Black();
+
+            const sidewalkMat = new BABYLON.StandardMaterial("sidewalkMat", scene);
+            sidewalkMat.diffuseColor = new BABYLON.Color3(0.12, 0.12, 0.12);
+            sidewalkMat.specularColor = BABYLON.Color3.Black();
+
+            const pupilMat = new BABYLON.StandardMaterial("pupilMat", scene);
+            pupilMat.diffuseColor = new BABYLON.Color3(0.02, 0.02, 0.02);
+            pupilMat.specularColor = BABYLON.Color3.Black();
+
+            // Ground
+            const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 120, height: 120 }, scene);
+            ground.material = groundMat;
+            ground.checkCollisions = true;
+
+            // City layout
+            const blockSize = 14;
+            const roadWidth = 6;
+            const cellSize = blockSize + roadWidth;
+            const gridCount = 5;
+            const offset = -(gridCount * cellSize) / 2 + cellSize / 2;
+
+            // Roads
+            for (let i = 0; i < gridCount; i++) {
+                const z = offset + i * cellSize;
+                const road = BABYLON.MeshBuilder.CreateGround("roadH" + i, { width: gridCount * cellSize + roadWidth, height: roadWidth }, scene);
+                road.position.y = 0.01;
+                road.position.z = z;
+                road.material = roadMat;
+
+                const road2 = BABYLON.MeshBuilder.CreateGround("roadV" + i, { width: roadWidth, height: gridCount * cellSize + roadWidth }, scene);
+                road2.position.y = 0.01;
+                road2.position.x = offset + i * cellSize;
+                road2.material = roadMat;
+            }
+
+            // Sidewalks
+            for (let i = 0; i < gridCount; i++) {
+                for (let side = -1; side <= 1; side += 2) {
+                    const z = offset + i * cellSize + side * (roadWidth / 2 + 0.5);
+                    const sw = BABYLON.MeshBuilder.CreateGround("swH" + i + side, { width: gridCount * cellSize, height: 1 }, scene);
+                    sw.position.y = 0.05;
+                    sw.position.z = z;
+                    sw.material = sidewalkMat;
+
+                    const x = offset + i * cellSize + side * (roadWidth / 2 + 0.5);
+                    const sw2 = BABYLON.MeshBuilder.CreateGround("swV" + i + side, { width: 1, height: gridCount * cellSize }, scene);
+                    sw2.position.y = 0.05;
+                    sw2.position.x = x;
+                    sw2.material = sidewalkMat;
+                }
+            }
+
+            // Seeded random
+            let seed = 42;
+            function rand() { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; }
+
+            // Buildings
+            const buildings = [];
+            for (let gx = 0; gx < gridCount; gx++) {
+                for (let gz = 0; gz < gridCount; gz++) {
+                    const cx = offset + gx * cellSize;
+                    const cz = offset + gz * cellSize;
+                    if (gx === Math.floor(gridCount / 2) && gz === Math.floor(gridCount / 2)) continue;
+
+                    const numBuildings = 1 + Math.floor(rand() * 2);
+                    for (let b = 0; b < numBuildings; b++) {
+                        const bw = 3 + rand() * (blockSize - 5);
+                        const bd = 3 + rand() * (blockSize - 5);
+                        const bh = 4 + rand() * 16;
+                        const bx = cx + (rand() - 0.5) * (blockSize - bw) * 0.8;
+                        const bz = cz + (rand() - 0.5) * (blockSize - bd) * 0.8;
+
+                        const building = BABYLON.MeshBuilder.CreateBox("bld" + gx + gz + b, { width: bw, height: bh, depth: bd }, scene);
+                        building.position = new BABYLON.Vector3(bx, bh / 2, bz);
+                        building.material = rand() > 0.5 ? buildingMat : darkBuildMat;
+                        building.checkCollisions = true;
+                        buildings.push(building);
+
+                        // Windows
+                        const floors = Math.floor(bh / 3);
+                        for (let f = 0; f < floors; f++) {
+                            const wy = f * 3 + 2;
+                            if (wy > bh - 1) continue;
+                            const wCount = Math.floor(bw / 2);
+                            for (let w = 0; w < wCount; w++) {
+                                if (rand() > 0.35) continue;
+                                const wx = bx - bw / 2 + 1 + w * 2;
+                                const isLit = rand() > 0.75;
+
+                                const win = BABYLON.MeshBuilder.CreatePlane("win", { width: 0.8, height: 1.2 }, scene);
+                                win.position = new BABYLON.Vector3(wx, wy, bz - bd / 2 - 0.01);
+                                win.material = isLit ? windowMat : windowDarkMat;
+
+                                if (rand() > 0.5) {
+                                    const win2 = BABYLON.MeshBuilder.CreatePlane("win2", { width: 0.8, height: 1.2 }, scene);
+                                    win2.position = new BABYLON.Vector3(wx, wy, bz + bd / 2 + 0.01);
+                                    win2.rotation.y = Math.PI;
+                                    win2.material = isLit ? windowMat : windowDarkMat;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Street lights
+            const streetLights = [];
+            for (let gx = 0; gx < gridCount; gx++) {
+                for (let gz = 0; gz < gridCount; gz++) {
+                    const cx = offset + gx * cellSize;
+                    const cz = offset + gz * cellSize;
+                    for (let corner = 0; corner < 4; corner++) {
+                        if (rand() > 0.45) continue;
+                        const sx = (corner % 2 === 0 ? -1 : 1) * (blockSize / 2 + 1);
+                        const sz = (corner < 2 ? -1 : 1) * (blockSize / 2 + 1);
+
+                        const pole = BABYLON.MeshBuilder.CreateCylinder("pole", { height: 4.5, diameter: 0.12 }, scene);
+                        pole.position = new BABYLON.Vector3(cx + sx, 2.25, cz + sz);
+                        pole.material = darkBuildMat;
+
+                        const lampMat = new BABYLON.StandardMaterial("lampMat" + gx + gz + corner, scene);
+                        lampMat.emissiveColor = new BABYLON.Color3(0.6, 0.45, 0.2);
+                        lampMat.diffuseColor = new BABYLON.Color3(0.6, 0.45, 0.2);
+                        const lamp = BABYLON.MeshBuilder.CreateSphere("lamp", { diameter: 0.3 }, scene);
+                        lamp.position = new BABYLON.Vector3(cx + sx, 4.6, cz + sz);
+                        lamp.material = lampMat;
+
+                        const light = new BABYLON.PointLight("sl" + gx + gz + corner, new BABYLON.Vector3(cx + sx, 4.5, cz + sz), scene);
+                        light.diffuse = new BABYLON.Color3(0.7, 0.5, 0.2);
+                        light.intensity = 0.6;
+                        light.range = 14;
+
+                        streetLights.push({ light, lampMat, baseIntensity: 0.6 });
+                    }
+                }
+            }
+
+            // Hemisphere light
+            const hemi = new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0, 1, 0), scene);
+            hemi.diffuse = new BABYLON.Color3(0.05, 0.05, 0.08);
+            hemi.groundColor = new BABYLON.Color3(0.01, 0.01, 0.02);
+            hemi.intensity = 0.4;
+
+            // === CREEPY PEOPLE ===
+            const people = [];
+            const personPositions = [];
+
+            for (let gx = 0; gx < gridCount; gx++) {
+                for (let gz = 0; gz < gridCount; gz++) {
+                    const cx = offset + gx * cellSize;
+                    const cz = offset + gz * cellSize;
+                    const numPeople = Math.floor(rand() * 3);
+                    for (let p = 0; p < numPeople; p++) {
+                        const angle = rand() * Math.PI * 2;
+                        const dist = blockSize / 2 + 1 + rand() * 2;
+                        personPositions.push(new BABYLON.Vector3(cx + Math.cos(angle) * dist, 0, cz + Math.sin(angle) * dist));
+                    }
+                }
+            }
+            for (let i = 0; i < 8; i++) {
+                personPositions.push(new BABYLON.Vector3((rand() - 0.5) * 50, 0, (rand() - 0.5) * 50));
+            }
+
+            function createPerson(pos, idx) {
+                const root = new BABYLON.TransformNode("person" + idx, scene);
+                root.position = pos.clone();
+
+                const heightScale = 0.85 + rand() * 0.35;
+                const isSlender = rand() > 0.5;
+                const bodyW = isSlender ? 0.3 : 0.4;
+
+                const pClothMat = new BABYLON.StandardMaterial("pcloth" + idx, scene);
+                const shade = 0.03 + rand() * 0.07;
+                pClothMat.diffuseColor = new BABYLON.Color3(shade, shade, shade);
+                pClothMat.specularColor = BABYLON.Color3.Black();
+
+                const pSkinMat = new BABYLON.StandardMaterial("pskin" + idx, scene);
+                const skinShade = 0.2 + rand() * 0.2;
+                pSkinMat.diffuseColor = new BABYLON.Color3(skinShade, skinShade * 0.85, skinShade * 0.8);
+                pSkinMat.specularColor = BABYLON.Color3.Black();
+
+                const body = BABYLON.MeshBuilder.CreateBox("body" + idx, { width: bodyW, height: 0.7 * heightScale, depth: 0.25 }, scene);
+                body.position.y = 0.85 * heightScale;
+                body.material = pClothMat;
+                body.parent = root;
+
+                for (let side = -1; side <= 1; side += 2) {
+                    const leg = BABYLON.MeshBuilder.CreateBox("leg" + idx + side, { width: 0.14, height: 0.8 * heightScale, depth: 0.16 }, scene);
+                    leg.position = new BABYLON.Vector3(side * 0.1, 0.4 * heightScale, 0);
+                    leg.material = pClothMat;
+                    leg.parent = root;
+                }
+
+                for (let side = -1; side <= 1; side += 2) {
+                    const arm = BABYLON.MeshBuilder.CreateBox("arm" + idx + side, { width: 0.1, height: 0.65 * heightScale, depth: 0.1 }, scene);
+                    arm.position = new BABYLON.Vector3(side * (bodyW / 2 + 0.06), 0.75 * heightScale, 0);
+                    arm.material = pClothMat;
+                    arm.parent = root;
+                }
+
+                const headNode = new BABYLON.TransformNode("headNode" + idx, scene);
+                headNode.parent = root;
+                headNode.position.y = 1.4 * heightScale;
+
+                const head = BABYLON.MeshBuilder.CreateBox("head" + idx, { width: 0.22, height: 0.26, depth: 0.22 }, scene);
+                head.material = pSkinMat;
+                head.parent = headNode;
+
+                const pEyeMat = new BABYLON.StandardMaterial("peye" + idx, scene);
+                pEyeMat.diffuseColor = new BABYLON.Color3(0.85, 0.85, 0.8);
+                pEyeMat.emissiveColor = new BABYLON.Color3(0.15, 0.12, 0.08);
+                pEyeMat.specularColor = BABYLON.Color3.Black();
+
+                for (let side = -1; side <= 1; side += 2) {
+                    const eye = BABYLON.MeshBuilder.CreateSphere("eye" + idx + side, { diameter: 0.05 }, scene);
+                    eye.position = new BABYLON.Vector3(side * 0.06, 0.03, -0.11);
+                    eye.material = pEyeMat;
+                    eye.parent = headNode;
+
+                    const pupil = BABYLON.MeshBuilder.CreateSphere("pupil" + idx + side, { diameter: 0.028 }, scene);
+                    pupil.position = new BABYLON.Vector3(side * 0.06, 0.03, -0.125);
+                    pupil.material = pupilMat;
+                    pupil.parent = headNode;
+                }
+
+                const mouth = BABYLON.MeshBuilder.CreatePlane("mouth" + idx, { width: 0.08, height: 0.01 }, scene);
+                mouth.position = new BABYLON.Vector3(0, -0.06, -0.115);
+                mouth.material = pupilMat;
+                mouth.parent = headNode;
+
+                const shadow = BABYLON.MeshBuilder.CreateGround("shadow" + idx, { width: 0.6, height: 0.6 }, scene);
+                shadow.position.y = 0.02;
+                const shadowMat = new BABYLON.StandardMaterial("shadowMat" + idx, scene);
+                shadowMat.diffuseColor = BABYLON.Color3.Black();
+                shadowMat.alpha = 0.5;
+                shadow.material = shadowMat;
+                shadow.parent = root;
+
+                return {
+                    root, headNode, eyeMat: pEyeMat,
+                    originalPos: pos.clone(),
+                    creepFactor: rand(),
+                    headTiltOffset: (rand() - 0.5) * 0.3,
+                    swaySpeed: 0.3 + rand() * 0.5,
+                    swayAmount: 0.002 + rand() * 0.005
+                };
+            }
+
+            for (let i = 0; i < personPositions.length; i++) {
+                people.push(createPerson(personPositions[i], i));
+            }
+
+            // === GAME LOOP ===
+            let time = 0;
+            let footstepTimer = 0;
+            let warningTimer = 0;
+            let warningActive = false;
+            let stingerCooldown = 0;
+            let whisperCooldown = 0;
+            let closestDist = Infinity;
+            let breathPhase = 0;
+            let mobileMoving = false;
+
+            scene.registerBeforeRender(() => {
+                const dt = engine.getDeltaTime() / 1000;
+                time += dt;
+
+                // === MOBILE INPUT PROCESSING ===
+                if (isMobile) {
+                    // Camera look from touch
+                    const lookSensitivity = 0.004;
+                    camera.rotation.y += touchLookDX * lookSensitivity;
+                    camera.rotation.x += touchLookDY * lookSensitivity;
+                    // Clamp vertical look
+                    camera.rotation.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, camera.rotation.x));
+                    touchLookDX = 0;
+                    touchLookDY = 0;
+
+                    // Movement from joystick
+                    const moveSpeed = sprinting ? 0.15 : 0.08;
+                    const hasInput = Math.abs(touchMoveX) > 0.1 || Math.abs(touchMoveZ) > 0.1;
+                    mobileMoving = hasInput;
+
+                    if (hasInput) {
+                        // Get camera forward and right vectors (on XZ plane)
+                        const forward = camera.getDirection(BABYLON.Vector3.Forward());
+                        forward.y = 0;
+                        forward.normalize();
+                        const right = camera.getDirection(BABYLON.Vector3.Right());
+                        right.y = 0;
+                        right.normalize();
+
+                        // Combine joystick input: X = left/right, Z = forward/back (inverted because touch Y down = forward)
+                        const moveDir = forward.scale(-touchMoveZ).add(right.scale(touchMoveX));
+                        if (moveDir.length() > 0) {
+                            moveDir.normalize();
+                            camera.position.addInPlace(moveDir.scale(moveSpeed));
+                        }
+                    }
+                }
+
+                const camPos = camera.position;
+
+                // Footstep sounds
+                const moving = isMobile ? mobileMoving : (camera._localDirection && (camera._localDirection.x !== 0 || camera._localDirection.z !== 0));
+                if (moving) {
+                    footstepTimer += dt * (sprinting ? 1.6 : 1);
+                    if (footstepTimer > 0.45) {
+                        footstepTimer = 0;
+                        playFootstep();
+                    }
+                }
+
+                // === PEOPLE ALWAYS LOOK AT PLAYER ===
+                closestDist = Infinity;
+                for (const p of people) {
+                    const dx = camPos.x - p.root.position.x;
+                    const dz = camPos.z - p.root.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    if (dist < closestDist) closestDist = dist;
+
+                    const angle = Math.atan2(dx, dz);
+                    p.root.rotation.y = angle;
+
+                    const dy = camPos.y - (p.root.position.y + 1.4);
+                    const pitchAngle = Math.atan2(dy, dist);
+                    p.headNode.rotation.x = pitchAngle * 0.5 + p.headTiltOffset;
+
+                    p.root.rotation.z = Math.sin(time * p.swaySpeed) * p.swayAmount;
+
+                    const glowIntensity = Math.max(0, 1 - dist / 20) * 0.35;
+                    p.eyeMat.emissiveColor = new BABYLON.Color3(
+                        0.15 + glowIntensity * 0.8,
+                        0.12 + glowIntensity * 0.2,
+                        0.08
+                    );
+
+                    // Creepy drift when not looking
+                    if (p.creepFactor > 0.6 && dist > 3 && dist < 30) {
+                        const forward = camera.getDirection(BABYLON.Vector3.Forward());
+                        const toPersonDir = new BABYLON.Vector3(dx, 0, dz).normalize();
+                        const dot = BABYLON.Vector3.Dot(new BABYLON.Vector3(forward.x, 0, forward.z).normalize(), toPersonDir);
+                        if (dot < 0.3) {
+                            p.root.position.x += (dx / dist) * -0.15 * dt;
+                            p.root.position.z += (dz / dist) * -0.15 * dt;
+                        }
+                    }
+                }
+
+                // Warning text
+                if (closestDist < 4) {
+                    if (!warningActive) {
+                        warningActive = true;
+                        warningEl.style.display = "block";
+                        const messages = [
+                            "they're closer now", "don't turn around", "they see you",
+                            "you can't leave", "why are you here", "we've been waiting", "look at us"
+                        ];
+                        warningEl.textContent = messages[Math.floor(Math.random() * messages.length)];
+                    }
+                    warningTimer += dt;
+                    warningEl.style.opacity = Math.sin(warningTimer * 2) * 0.5 + 0.5;
+                } else {
+                    warningActive = false;
+                    warningTimer = 0;
+                    warningEl.style.opacity = 0;
+                }
+
+                // Scary stinger
+                stingerCooldown -= dt;
+                if (closestDist < 5 && stingerCooldown <= 0) {
+                    const forward = camera.getDirection(BABYLON.Vector3.Forward());
+                    for (const p of people) {
+                        const dx = p.root.position.x - camPos.x;
+                        const dz = p.root.position.z - camPos.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        if (dist < 5) {
+                            const dir = new BABYLON.Vector3(dx, 0, dz).normalize();
+                            const dot = BABYLON.Vector3.Dot(new BABYLON.Vector3(forward.x, 0, forward.z).normalize(), dir);
+                            if (dot > 0.85) {
+                                playScaryStinger();
+                                stingerCooldown = 8;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Random whispers
+                whisperCooldown -= dt;
+                if (whisperCooldown <= 0) {
+                    if (closestDist < 15) playWhisper();
+                    whisperCooldown = 5 + Math.random() * 12;
+                }
+
+                // Flickering lights
+                for (const sl of streetLights) {
+                    if (Math.random() < 0.005) {
+                        sl.light.intensity = 0;
+                        sl.lampMat.emissiveColor = BABYLON.Color3.Black();
+                    } else {
+                        const flicker = sl.baseIntensity + Math.sin(time * 10 + sl.light.position.x) * 0.08;
+                        sl.light.intensity = flicker;
+                        sl.lampMat.emissiveColor = new BABYLON.Color3(0.6 * flicker, 0.45 * flicker, 0.2 * flicker);
+                    }
+                }
+
+                // Breathing
+                breathPhase += dt * 1.2;
+                camera.rotation.z = Math.sin(breathPhase) * 0.003;
+
+                // Vignette
+                const vignetteIntensity = Math.max(0.5, Math.min(1, 1 - (closestDist - 3) / 15));
+                vignette.style.background = `radial-gradient(ellipse at center, transparent ${50 - vignetteIntensity * 15}%, rgba(0,0,0,${vignetteIntensity * 0.85}) 100%)`;
+
+                // Dynamic fog
+                scene.fogDensity = 0.025 + Math.max(0, (8 - closestDist) / 8) * 0.015;
+            });
+
+            return scene;
+        };
+
+        const scene = createScene();
+
+        // Start game
+        overlay.addEventListener("click", startGame);
+        overlay.addEventListener("touchend", (e) => { e.preventDefault(); startGame(); });
+
+        function startGame() {
+            overlay.style.display = "none";
+            crosshair.style.display = "block";
+            vignette.style.display = "block";
+            warningEl.style.display = "none";
+            startAmbience();
+
+            if (isMobile) {
+                touchControls.style.display = "block";
+                setupTouchControls();
+                // Force fullscreen on mobile if possible
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                }
+            } else {
+                canvas.requestPointerLock();
+            }
+        }
+
+        if (!isMobile) {
+            canvas.addEventListener("click", () => {
+                if (!document.pointerLockElement) canvas.requestPointerLock();
+            });
+        }
+
+        engine.runRenderLoop(() => scene.render());
+        window.addEventListener("resize", () => engine.resize());
+
+        // Handle orientation change on mobile
+        window.addEventListener("orientationchange", () => {
+            setTimeout(() => engine.resize(), 200);
+        });
+    </script>
+</body>
+</html>
