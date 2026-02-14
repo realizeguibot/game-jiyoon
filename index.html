@@ -78,7 +78,7 @@
         <p style="color:#555; font-size:min(0.9em,3vw); margin-top:10px;">They see you. They always see you.</p>
         <p class="hint">Tap to begin</p>
         <p class="hint" style="margin-top:10px; color:#333;" id="controlsHint"></p>
-        <p id="version">v0.8</p>
+        <p id="version">v0.9</p>
     </div>
     <div id="crosshair"></div>
     <div id="vignette"></div>
@@ -524,62 +524,77 @@
                 const hn = new BABYLON.TransformNode("hn"+idx, scene);
                 hn.parent = root; hn.position.y = 1.4*hs;
 
-                // Head - flattened at back so face sticks out front
-                const head = BABYLON.MeshBuilder.CreateSphere("hd"+idx, {diameterX:0.24,diameterY:0.28,diameterZ:0.18,segments:8}, scene);
+                // Head - box (reliable on all GPUs)
+                const head = BABYLON.MeshBuilder.CreateBox("hd"+idx, {width:0.24,height:0.28,depth:0.2}, scene);
                 head.material = sm; head.parent = hn;
 
-                // Eye whites - big, well outside head surface
+                // === FACE: all planes, placed well in front of head (z = -0.101+) ===
+                // Face uses only CreatePlane which is guaranteed to render everywhere
+
+                // Eye whites - bright glowing planes
                 const em = new BABYLON.StandardMaterial("pe"+idx, scene);
-                em.diffuseColor = new BABYLON.Color3(1, 1, 0.97);
-                em.emissiveColor = new BABYLON.Color3(0.3, 0.25, 0.2);
-                em.specularColor = new BABYLON.Color3(0.3, 0.3, 0.3);
+                em.diffuseColor = new BABYLON.Color3(1, 1, 1);
+                em.emissiveColor = new BABYLON.Color3(0.6, 0.6, 0.5);
+                em.specularColor = BABYLON.Color3.Black();
+                em.backFaceCulling = false;
 
                 // Iris material
                 const irisMat = new BABYLON.StandardMaterial("ir"+idx, scene);
-                const irisR = 0.15 + rand()*0.25;
-                const irisG = 0.15 + rand()*0.2;
-                const irisB = 0.1 + rand()*0.3;
+                const irisR = 0.2 + rand()*0.3;
+                const irisG = 0.2 + rand()*0.25;
+                const irisB = 0.15 + rand()*0.35;
                 irisMat.diffuseColor = new BABYLON.Color3(irisR, irisG, irisB);
-                irisMat.emissiveColor = new BABYLON.Color3(irisR*0.2, irisG*0.2, irisB*0.2);
-                irisMat.specularColor = new BABYLON.Color3(0.3, 0.3, 0.3);
+                irisMat.emissiveColor = new BABYLON.Color3(irisR*0.3, irisG*0.3, irisB*0.3);
+                irisMat.specularColor = BABYLON.Color3.Black();
+                irisMat.backFaceCulling = false;
+
+                const pupMat = new BABYLON.StandardMaterial("pm"+idx, scene);
+                pupMat.diffuseColor = new BABYLON.Color3(0, 0, 0);
+                pupMat.emissiveColor = BABYLON.Color3.Black();
+                pupMat.specularColor = BABYLON.Color3.Black();
+                pupMat.backFaceCulling = false;
 
                 for (let s = -1; s <= 1; s += 2) {
-                    // Eye white - large, protruding
-                    const eyeWhite = BABYLON.MeshBuilder.CreateSphere("ew"+idx+s, {diameterX:0.09,diameterY:0.055,diameterZ:0.05,segments:8}, scene);
-                    eyeWhite.position = new BABYLON.Vector3(s*0.055, 0.02, -0.1);
-                    eyeWhite.material = em; eyeWhite.parent = hn;
+                    // Eye white - large plane
+                    const ew = BABYLON.MeshBuilder.CreatePlane("ew"+idx+s, {width:0.09,height:0.05}, scene);
+                    ew.position = new BABYLON.Vector3(s*0.055, 0.025, -0.101);
+                    ew.material = em; ew.parent = hn;
 
-                    // Iris - on the surface of eye white
-                    const iris = BABYLON.MeshBuilder.CreateSphere("ir"+idx+s, {diameter:0.04,segments:8}, scene);
-                    iris.position = new BABYLON.Vector3(s*0.055, 0.02, -0.125);
-                    iris.material = irisMat; iris.parent = hn;
+                    // Iris - plane on top of white
+                    const ir = BABYLON.MeshBuilder.CreatePlane("ir"+idx+s, {width:0.045,height:0.045}, scene);
+                    ir.position = new BABYLON.Vector3(s*0.055, 0.025, -0.102);
+                    ir.material = irisMat; ir.parent = hn;
 
-                    // Pupil - front of iris
-                    const pup = BABYLON.MeshBuilder.CreateSphere("pu"+idx+s, {diameter:0.022,segments:6}, scene);
-                    pup.position = new BABYLON.Vector3(s*0.055, 0.02, -0.14);
-                    pup.material = pupilMat; pup.parent = hn;
+                    // Pupil - black dot plane
+                    const pu = BABYLON.MeshBuilder.CreatePlane("pu"+idx+s, {width:0.022,height:0.022}, scene);
+                    pu.position = new BABYLON.Vector3(s*0.055, 0.025, -0.103);
+                    pu.material = pupMat; pu.parent = hn;
 
-                    // Eyebrow
-                    const brow = BABYLON.MeshBuilder.CreateBox("br"+idx+s, {width:0.1,height:0.015,depth:0.025}, scene);
-                    brow.position = new BABYLON.Vector3(s*0.055, 0.06, -0.09);
-                    brow.rotation.z = s * -0.2;
+                    // Eyebrow - dark bar above eye
                     const browMat = new BABYLON.StandardMaterial("brm"+idx+s, scene);
-                    browMat.diffuseColor = new BABYLON.Color3(ss*0.3, ss*0.25, ss*0.2);
+                    browMat.diffuseColor = new BABYLON.Color3(0.1, 0.08, 0.06);
+                    browMat.emissiveColor = new BABYLON.Color3(0.05, 0.04, 0.03);
                     browMat.specularColor = BABYLON.Color3.Black();
-                    brow.material = browMat; brow.parent = hn;
+                    browMat.backFaceCulling = false;
+                    const br = BABYLON.MeshBuilder.CreatePlane("br"+idx+s, {width:0.1,height:0.015}, scene);
+                    br.position = new BABYLON.Vector3(s*0.055, 0.06, -0.101);
+                    br.rotation.z = s * -0.15;
+                    br.material = browMat; br.parent = hn;
                 }
 
-                // Nose - protruding
-                const nose = BABYLON.MeshBuilder.CreateBox("ns"+idx, {width:0.03,height:0.05,depth:0.04}, scene);
-                nose.position = new BABYLON.Vector3(0, -0.02, -0.11);
+                // Nose - small box sticking out
+                const nose = BABYLON.MeshBuilder.CreateBox("ns"+idx, {width:0.03,height:0.045,depth:0.06}, scene);
+                nose.position = new BABYLON.Vector3(0, -0.015, -0.12);
                 nose.material = sm; nose.parent = hn;
 
-                // Mouth - dark opening
+                // Mouth - dark plane
                 const mouthMat = new BABYLON.StandardMaterial("mm"+idx, scene);
-                mouthMat.diffuseColor = new BABYLON.Color3(0.12, 0.03, 0.03);
+                mouthMat.diffuseColor = new BABYLON.Color3(0.1, 0.02, 0.02);
+                mouthMat.emissiveColor = new BABYLON.Color3(0.05, 0.01, 0.01);
                 mouthMat.specularColor = BABYLON.Color3.Black();
+                mouthMat.backFaceCulling = false;
                 const mouth = BABYLON.MeshBuilder.CreatePlane("mo"+idx, {width:0.08,height:0.02}, scene);
-                mouth.position = new BABYLON.Vector3(0, -0.065, -0.1);
+                mouth.position = new BABYLON.Vector3(0, -0.06, -0.101);
                 mouth.material = mouthMat; mouth.parent = hn;
 
                 const shd = BABYLON.MeshBuilder.CreateGround("sh"+idx, {width:0.6,height:0.6}, scene);
